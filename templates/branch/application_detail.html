@@ -1,28 +1,40 @@
 {% extends "base.html" %}
 {% block title %}신청서 상세 #{{ app.id }}{% endblock %}
 
+{% block extra_css %}
+<style>
+  @media (max-width: 767.98px) {
+    .action-panel { margin-top: 0; }
+    .detail-label { font-size: 11px; color: #999; }
+    .detail-value { font-size: 14px; font-weight: 600; }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-<div class="page-header d-flex justify-content-between align-items-center">
-  <div>
-    <h4>
-      <i class="bi bi-file-earmark-text me-2" style="color:var(--mg)"></i>
-      {{ app.title if app.title else '신청서 #' ~ app.id }}
-    </h4>
-    <nav aria-label="breadcrumb">
-      <ol class="breadcrumb mb-0">
-        <li class="breadcrumb-item"><a href="/branch/dashboard" style="color:var(--mg)">대시보드</a></li>
-        <li class="breadcrumb-item active">신청서 #{{ app.id }}</li>
-      </ol>
-    </nav>
+<div class="page-header">
+  <div class="d-flex justify-content-between align-items-start gap-2">
+    <div>
+      <h4>
+        <i class="bi bi-file-earmark-text me-2" style="color:var(--mg)"></i>
+        {{ app.title if app.title else '신청서 #' ~ app.id }}
+      </h4>
+      <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0">
+          <li class="breadcrumb-item"><a href="/branch/dashboard" style="color:var(--mg)">대시보드</a></li>
+          <li class="breadcrumb-item active">신청서 #{{ app.id }}</li>
+        </ol>
+      </nav>
+    </div>
+    <span class="s-badge bg-{{ STATUS_COLOR[app.status] }} {% if app.status in ['submitted','priced'] %}text-dark{% endif %}" style="font-size:12px;padding:6px 14px;white-space:nowrap;margin-top:4px">
+      {{ STATUS_LABEL[app.status] }}
+    </span>
   </div>
-  <span class="s-badge bg-{{ STATUS_COLOR[app.status] }} {% if app.status in ['submitted','priced'] %}text-dark{% endif %}" style="font-size:13px;padding:6px 16px">
-    {{ STATUS_LABEL[app.status] }}
-  </span>
 </div>
 
 <!-- 진행 단계 -->
 {% set steps = [
-  ('submitted','접수'),('approved','승인'),('scheduled','일정확정'),
+  ('submitted','접수'),('approved','승인'),('scheduled','일정'),
   ('schedule_confirmed','수거예정'),('collected','수거완료'),
   ('priced','금액산정'),('branch_confirmed','지점승인'),('completed','완료')
 ] %}
@@ -40,6 +52,98 @@
   <div class="step-line {% if s_idx < cur_idx %}step-done{% else %}step-pending{% endif %}"></div>
   {% endif %}
   {% endfor %}
+</div>
+
+<!-- 액션 패널: 모바일에서 상단 노출 -->
+<div class="d-md-none mb-3 action-panel">
+  {% include "branch/_action_panel.html" ignore missing %}
+  {% if app.status == 'draft' %}
+  <div class="card border-warning">
+    <div class="card-header bg-warning bg-opacity-10"><i class="bi bi-pencil-square me-2"></i>신청서 제출</div>
+    <div class="card-body">
+      <p style="font-size:13px">자산 입력이 완료되면 신청서를 제출해 주세요.</p>
+      <form method="post" action="/branch/applications/{{ app.id }}/submit" onsubmit="return confirm('신청서를 제출하시겠습니까?')">
+        <button type="submit" class="btn btn-mg w-100"><i class="bi bi-send-fill me-2"></i>신청서 제출</button>
+      </form>
+    </div>
+  </div>
+  {% elif app.status == 'submitted' %}
+  <div class="card border-0" style="background:#fff8e1">
+    <div class="card-body text-center py-3">
+      <i class="bi bi-hourglass-split" style="font-size:28px;color:#f57c00"></i>
+      <div class="fw-bold mt-1">검토 중</div>
+      <div class="text-muted" style="font-size:12px">담당자가 검토하고 있습니다.</div>
+    </div>
+  </div>
+  {% elif app.status == 'approved' %}
+  <div class="card border-0" style="background:#e3f2fd">
+    <div class="card-body text-center py-3">
+      <i class="bi bi-check-circle-fill" style="font-size:28px;color:#1565c0"></i>
+      <div class="fw-bold mt-1">승인 완료 - 일정 조율 중</div>
+    </div>
+  </div>
+  {% elif app.status == 'scheduled' %}
+  <div class="card border-primary">
+    <div class="card-header bg-primary text-white"><i class="bi bi-calendar-check me-2"></i>방문 일정 확인</div>
+    <div class="card-body">
+      {% if app.schedule %}
+      <div class="row g-2 mb-3" style="font-size:13px">
+        <div class="col-6"><div class="detail-label">방문일</div><div class="detail-value">{{ app.schedule.visit_date }}</div></div>
+        <div class="col-6"><div class="detail-label">시간</div><div class="detail-value">{{ app.schedule.visit_time }}</div></div>
+        <div class="col-6"><div class="detail-label">담당자</div><div class="detail-value">{{ app.schedule.collector_name }}</div></div>
+        <div class="col-6"><div class="detail-label">연락처</div><div class="detail-value">{{ app.schedule.collector_phone }}</div></div>
+      </div>
+      <div class="alert alert-warning py-2 mb-2" style="font-size:12px">
+        <i class="bi bi-exclamation-triangle me-1"></i>일정을 확인하고 수락해 주세요.
+      </div>
+      <form method="post" action="/branch/applications/{{ app.id }}/confirm-schedule" onsubmit="return confirm('방문 일정을 수락하시겠습니까?')">
+        <button type="submit" class="btn btn-primary w-100"><i class="bi bi-calendar-check me-2"></i>일정 확인 / 수락</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% elif app.status == 'priced' %}
+  <div class="card border-warning">
+    <div class="card-header" style="background:#fff8e1"><i class="bi bi-currency-dollar me-2"></i>수령 금액 확인</div>
+    <div class="card-body">
+      {% if app.settlement %}
+      <div class="text-center py-2 mb-3">
+        <div style="font-size:12px;color:#888">수령 예정 금액</div>
+        <div style="font-size:28px;font-weight:700;color:var(--mg)">
+          {{ "{:,.0f}".format(app.settlement.branch_total_amount) }}<span style="font-size:14px;font-weight:400">원</span>
+        </div>
+      </div>
+      <form method="post" action="/branch/applications/{{ app.id }}/confirm-price" onsubmit="return confirm('금액을 승인하시겠습니까?')">
+        <button type="submit" class="btn btn-mg w-100"><i class="bi bi-check-circle me-2"></i>금액 승인</button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  {% elif app.status in ['schedule_confirmed','collected','branch_confirmed','completed'] %}
+  <div class="card border-0" style="background:#e8f5e9">
+    <div class="card-body text-center py-3">
+      {% if app.status == 'schedule_confirmed' %}
+      <i class="bi bi-truck" style="font-size:28px;color:var(--mg)"></i>
+      <div class="fw-bold mt-1">수거 예정</div>
+      {% elif app.status == 'collected' %}
+      <i class="bi bi-box-seam-fill" style="font-size:28px;color:#1565c0"></i>
+      <div class="fw-bold mt-1">수거 완료 - 금액 산정 중</div>
+      {% elif app.status == 'branch_confirmed' %}
+      <i class="bi bi-hourglass-split" style="font-size:28px;color:var(--mg)"></i>
+      <div class="fw-bold mt-1">입금 처리 중</div>
+      {% elif app.status == 'completed' %}
+      <i class="bi bi-check-circle-fill" style="font-size:28px;color:var(--mg)"></i>
+      <div class="fw-bold mt-1">거래 완료</div>
+      {% endif %}
+      {% if app.settlement and app.status in ['branch_confirmed','completed'] %}
+      <div class="mt-2 p-2 bg-white rounded border">
+        <div style="font-size:11px;color:#888">{{ '입금 완료' if app.status == 'completed' else '수령 예정' }} 금액</div>
+        <div style="font-size:20px;font-weight:700;color:var(--mg)">{{ "{:,.0f}".format(app.settlement.branch_total_amount) }}원</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
 </div>
 
 <div class="row g-3">
@@ -68,65 +172,96 @@
     <div class="card mb-3">
       <div class="card-header"><i class="bi bi-laptop me-2"></i>신청 자산 목록</div>
       <div class="card-body p-0">
-        <table class="table mb-0" style="font-size:13px">
-          <thead class="table-light">
-            <tr>
-              <th class="ps-3">카테고리</th>
-              <th>모델명 / 사양</th>
-              <th>제조사</th>
-              <th>제조연도</th>
-              <th>수량</th>
-              <th>상태</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for item in app.assets %}
-            <tr>
-              <td class="ps-3">
+        <!-- 모바일 자산 카드 -->
+        <div class="d-md-none p-2">
+          {% for item in app.assets %}
+          <div class="card mb-2" style="border:1px solid #eee;box-shadow:none">
+            <div class="card-body py-2 px-3">
+              <div class="d-flex justify-content-between align-items-center mb-1">
                 <span class="badge bg-secondary">{{ item.category }}</span>
-              </td>
-              <td>
-                {{ item.model_name or '-' }}
-                {% if item.category in ['PC', '노트북'] %}
-                <div style="font-size:11px;color:#888;margin-top:2px">
-                  {% if item.memory_spec %}메모리: {{ item.memory_spec }}{% endif %}
-                  {% if item.storage_spec %} &nbsp;저장: {{ item.storage_spec }}{% endif %}
-                  {% if item.data_wiped %} &nbsp;<span class="badge bg-success bg-opacity-75" style="font-size:10px">{{ item.data_wiped }}</span>{% endif %}
-                  {% if item.category == '노트북' and item.has_adapter %} &nbsp;<span class="badge bg-info text-dark bg-opacity-75" style="font-size:10px">아답터 {{ item.has_adapter }}</span>{% endif %}
-                </div>
-                {% endif %}
-              </td>
-              <td>{{ item.manufacturer or '-' }}</td>
-              <td>{{ item.manufacture_year or '-' }}</td>
-              <td><strong>{{ item.quantity }}</strong>개</td>
-              <td>
-                {% if item.condition == '상' %}<span class="badge bg-success">상</span>
-                {% elif item.condition == '중' %}<span class="badge bg-warning text-dark">중</span>
-                {% else %}<span class="badge bg-danger">하</span>{% endif %}
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
+                <span style="font-size:12px">
+                  {% if item.condition == '상' %}<span class="badge bg-success">상</span>
+                  {% elif item.condition == '중' %}<span class="badge bg-warning text-dark">중</span>
+                  {% else %}<span class="badge bg-danger">하</span>{% endif %}
+                  &nbsp;<strong>{{ item.quantity }}</strong>개
+                </span>
+              </div>
+              <div style="font-size:13px;font-weight:500">{{ item.model_name or '-' }}</div>
+              <div style="font-size:11px;color:#888">{{ item.manufacturer or '' }}{% if item.manufacture_year %} · {{ item.manufacture_year }}년{% endif %}</div>
+              {% if item.category in ['PC','노트북'] and (item.memory_spec or item.storage_spec) %}
+              <div style="font-size:11px;color:#666;margin-top:3px">
+                {% if item.memory_spec %}메모리: {{ item.memory_spec }}{% endif %}
+                {% if item.storage_spec %} &nbsp;저장: {{ item.storage_spec }}{% endif %}
+              </div>
+              {% endif %}
+            </div>
+          </div>
+          {% endfor %}
           {% if app.status in ['priced','branch_confirmed','completed'] and app.settlement %}
-          <tfoot class="table-light">
-            <tr>
-              <td colspan="6" class="text-end fw-bold ps-3">수령 예정 금액</td>
-              <td colspan="2" class="fw-bold" style="color:var(--mg);font-size:15px">
-                {{ "{:,.0f}".format(app.settlement.branch_total_amount) }}원
-              </td>
-            </tr>
-          </tfoot>
+          <div class="text-end py-2 px-2 fw-bold" style="color:var(--mg)">
+            수령 예정: {{ "{:,.0f}".format(app.settlement.branch_total_amount) }}원
+          </div>
           {% endif %}
-        </table>
+        </div>
+        <!-- 데스크톱 테이블 -->
+        <div class="d-none d-md-block table-responsive">
+          <table class="table mb-0" style="font-size:13px">
+            <thead class="table-light">
+              <tr>
+                <th class="ps-3">카테고리</th>
+                <th>모델명 / 사양</th>
+                <th>제조사</th>
+                <th>제조연도</th>
+                <th>수량</th>
+                <th>상태</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for item in app.assets %}
+              <tr>
+                <td class="ps-3"><span class="badge bg-secondary">{{ item.category }}</span></td>
+                <td>
+                  {{ item.model_name or '-' }}
+                  {% if item.category in ['PC', '노트북'] %}
+                  <div style="font-size:11px;color:#888;margin-top:2px">
+                    {% if item.memory_spec %}메모리: {{ item.memory_spec }}{% endif %}
+                    {% if item.storage_spec %} &nbsp;저장: {{ item.storage_spec }}{% endif %}
+                    {% if item.data_wiped %} &nbsp;<span class="badge bg-success bg-opacity-75" style="font-size:10px">{{ item.data_wiped }}</span>{% endif %}
+                    {% if item.category == '노트북' and item.has_adapter %} &nbsp;<span class="badge bg-info text-dark bg-opacity-75" style="font-size:10px">아답터 {{ item.has_adapter }}</span>{% endif %}
+                  </div>
+                  {% endif %}
+                </td>
+                <td>{{ item.manufacturer or '-' }}</td>
+                <td>{{ item.manufacture_year or '-' }}</td>
+                <td><strong>{{ item.quantity }}</strong>개</td>
+                <td>
+                  {% if item.condition == '상' %}<span class="badge bg-success">상</span>
+                  {% elif item.condition == '중' %}<span class="badge bg-warning text-dark">중</span>
+                  {% else %}<span class="badge bg-danger">하</span>{% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+            {% if app.status in ['priced','branch_confirmed','completed'] and app.settlement %}
+            <tfoot class="table-light">
+              <tr>
+                <td colspan="5" class="text-end fw-bold ps-3">수령 예정 금액</td>
+                <td class="fw-bold" style="color:var(--mg);font-size:15px">
+                  {{ "{:,.0f}".format(app.settlement.branch_total_amount) }}원
+                </td>
+              </tr>
+            </tfoot>
+            {% endif %}
+          </table>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- 오른쪽: 상태별 액션 패널 -->
-  <div class="col-lg-4">
+  <!-- 오른쪽: 액션 패널 (데스크톱만) -->
+  <div class="col-lg-4 d-none d-md-block">
 
     {% if app.status == 'draft' %}
-    <!-- 작성중: 제출 버튼 -->
     <div class="card border-warning">
       <div class="card-header bg-warning bg-opacity-10"><i class="bi bi-pencil-square me-2"></i>신청서 제출</div>
       <div class="card-body">
@@ -144,7 +279,7 @@
       <div class="card-body text-center py-4">
         <i class="bi bi-hourglass-split" style="font-size:36px;color:#f57c00"></i>
         <div class="fw-bold mt-2">검토 중</div>
-        <div class="text-muted mt-1" style="font-size:12px">복지회 및 매입사 담당자가<br/>신청 내용을 검토하고 있습니다.</div>
+        <div class="text-muted mt-1" style="font-size:12px">담당자가<br/>신청 내용을 검토하고 있습니다.</div>
       </div>
     </div>
 
@@ -161,27 +296,22 @@
     </div>
 
     {% elif app.status == 'scheduled' %}
-    <!-- 방문 일정 확인 -->
     <div class="card border-primary">
       <div class="card-header bg-primary text-white"><i class="bi bi-calendar-check me-2"></i>방문 일정 확인</div>
       <div class="card-body">
         {% if app.schedule %}
         <div style="font-size:13px" class="mb-3">
           <div class="d-flex justify-content-between py-2 border-bottom">
-            <span class="text-muted">방문 예정일</span>
-            <strong>{{ app.schedule.visit_date }}</strong>
+            <span class="text-muted">방문 예정일</span><strong>{{ app.schedule.visit_date }}</strong>
           </div>
           <div class="d-flex justify-content-between py-2 border-bottom">
-            <span class="text-muted">방문 시간</span>
-            <strong>{{ app.schedule.visit_time }}</strong>
+            <span class="text-muted">방문 시간</span><strong>{{ app.schedule.visit_time }}</strong>
           </div>
           <div class="d-flex justify-content-between py-2 border-bottom">
-            <span class="text-muted">담당자</span>
-            <strong>{{ app.schedule.collector_name }}</strong>
+            <span class="text-muted">담당자</span><strong>{{ app.schedule.collector_name }}</strong>
           </div>
           <div class="d-flex justify-content-between py-2">
-            <span class="text-muted">연락처</span>
-            <strong>{{ app.schedule.collector_phone }}</strong>
+            <span class="text-muted">연락처</span><strong>{{ app.schedule.collector_phone }}</strong>
           </div>
           {% if app.schedule.notes %}
           <div class="mt-2 p-2 bg-light rounded" style="font-size:12px">{{ app.schedule.notes }}</div>
@@ -224,12 +354,11 @@
       <div class="card-body text-center py-4">
         <i class="bi bi-box-seam-fill" style="font-size:36px;color:#1565c0"></i>
         <div class="fw-bold mt-2">수거 완료</div>
-        <div class="text-muted mt-1" style="font-size:12px">자산 수거가 완료되었습니다.<br/>매입사에서 금액 산정 중입니다.</div>
+        <div class="text-muted mt-1" style="font-size:12px">자산 수거가 완료되었습니다.<br/>금액 산정 중입니다.</div>
       </div>
     </div>
 
     {% elif app.status == 'priced' %}
-    <!-- 금액 승인 -->
     <div class="card border-warning mb-3">
       <div class="card-header" style="background:#fff8e1"><i class="bi bi-currency-dollar me-2"></i>수령 금액 확인</div>
       <div class="card-body">
@@ -259,8 +388,8 @@
     <div class="card border-0 mb-3" style="background:#e8f5e9">
       <div class="card-body text-center py-4">
         <i class="bi bi-hourglass-split" style="font-size:36px;color:var(--mg)"></i>
-        <div class="fw-bold mt-2">복지회 최종 확인 중</div>
-        <div class="text-muted mt-1" style="font-size:12px">주관사에서<br/>입금 처리 중입니다.</div>
+        <div class="fw-bold mt-2">최종 확인 중</div>
+        <div class="text-muted mt-1" style="font-size:12px">입금 처리 중입니다.</div>
         {% if app.settlement %}
         <div class="mt-3 p-3 bg-white rounded border">
           <div style="font-size:11px;color:#888">수령 예정 금액</div>
@@ -288,10 +417,9 @@
     </div>
     {% endif %}
 
-    <!-- 데이터 파기 확인서 다운로드 (collected 이후 공통) -->
     {% if app.data_wipe_record and app.status in ['collected','priced','branch_confirmed','completed'] %}
     <div class="card">
-      <div class="card-header" style="font-size:13px"><i class="bi bi-file-earmark-excel me-2" style="color:#217346"></i>데이터 파기 확인서 다운로드</div>
+      <div class="card-header" style="font-size:13px"><i class="bi bi-file-earmark-excel me-2" style="color:#217346"></i>데이터 파기 확인서</div>
       <div class="card-body">
         <a href="/branch/applications/{{ app.id }}/report/blancco"
            class="btn btn-sm w-100 mb-2" style="background:#1A237E;color:#fff;font-size:12px">
@@ -308,6 +436,23 @@
 
   </div>
 </div>
+
+<!-- 데이터 파기 확인서 (모바일) -->
+{% if app.data_wipe_record and app.status in ['collected','priced','branch_confirmed','completed'] %}
+<div class="card d-md-none mt-3">
+  <div class="card-header" style="font-size:13px"><i class="bi bi-file-earmark-excel me-2" style="color:#217346"></i>데이터 파기 확인서</div>
+  <div class="card-body">
+    <a href="/branch/applications/{{ app.id }}/report/blancco"
+       class="btn btn-sm w-100 mb-2" style="background:#1A237E;color:#fff;font-size:12px">
+      <i class="bi bi-download me-1"></i>블랑코 영구삭제 보고서
+    </a>
+    <a href="/branch/applications/{{ app.id }}/report/destruction"
+       class="btn btn-sm w-100" style="background:#217346;color:#fff;font-size:12px">
+      <i class="bi bi-download me-1"></i>파쇄증명서 / 인수인계증 / 폐기확인서
+    </a>
+  </div>
+</div>
+{% endif %}
 
 <div class="mt-3">
   <a href="/branch/dashboard" class="btn btn-outline-secondary btn-sm">
