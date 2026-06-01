@@ -1,0 +1,18 @@
+services:
+  - type: web
+    name: sfs-platform
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python init_data.py && uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sfs-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+
+databases:
+  - name: sfs-db
+    databaseName: sfs
+    user: sfs_user
